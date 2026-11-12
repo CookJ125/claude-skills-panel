@@ -118,6 +118,27 @@ test('a re-check waits for 3 more messages and new work', async ($, on) => {
   expect(count()).toBe(2)
 })
 
+test('"Suggest now" asks Haiku right away in a new thread, and counts as a check', async ($, on) => {
+  const asked = engine(on, { isCloud: false, answer: ANSWER })
+  await $.session.start({ cwd: 'D:/x', surface: 'desktop', isInteractive: true })
+  const count = () => asked.filter(p => p.includes('Which skills fit')).length
+
+  const empty = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await empty.find({ key: 'now' })).toBeUndefined() // nothing to go on yet
+  await empty.unmount()
+
+  await turn($, 'the tether jitters when the wizard turns')
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'now' })
+    expect(await ui.find({ key: 'sug:superpowers:systematic-debugging' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /The tether bug survived two fixes/ })).toBeDefined()
+    await ui.unmount()
+  }
+  expect(count()).toBe(2)
+  expect(asked.find(p => p.includes('Which skills fit'))).toContain('tether jitters')
+})
+
 test('in a cloud session, PC-only skills are faded and still recommended with a move hint', async ($, on) => {
   const clock = mock.clock(on)
   engine(on, { isCloud: true, answer: ANSWER })

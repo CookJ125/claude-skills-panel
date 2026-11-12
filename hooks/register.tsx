@@ -11,6 +11,7 @@ import {
   WORK_TOOLS,
   activityText,
   baseName,
+  canForce,
   isImportant,
   parseRecs,
   parseTips,
@@ -117,9 +118,10 @@ function entries(hn: Here | null, autoTips: Record<string, AutoTip>): Entry[] {
 
 // ---------- asking Haiku
 
-async function runCheck($: EngineInterface) {
+/** `isForced` is the panel's "Suggest now" button: it skips the wait for real work. */
+async function runCheck($: EngineInterface, isForced = false) {
   const a = await read($, activity)
-  if (!shouldCheck(a)) return
+  if (!(isForced ? canForce(a) : shouldCheck(a))) return
   await update($, activity, x => ({ ...x, isChecking: true }))
   const hn = await read($, here)
   const list = entries(hn, await read($, tips))
@@ -405,6 +407,7 @@ export const register: Register = on => {
           <Box flexDirection="column">
             <Text weight="semibold">Suggested for this thread</Text>
             {status}
+            {canForce(a) && <Button key="now" label="Suggest now" onPress={() => void runCheck($, true)} />}
             {suggested.map(i => {
               const s = byId.get(i.id) as Entry
               return (

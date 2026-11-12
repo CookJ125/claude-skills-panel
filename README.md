@@ -3,7 +3,7 @@
 A Claude Code mod that adds a `/skills-panel` side panel listing every skill you can use, and suggests the ones that fit the thread you're working in.
 
 - **Every skill, in one place.** The list is read from what's installed in each session, with hand-written "Try" prompts and tips where they exist. New skills get a Try prompt and tip written once by Haiku. Each skill shows where it works (Code, Cloud, Chat) and whether it needs a sign-in.
-- **Suggestions for busy threads.** Once a thread has 3 of your messages and Claude has edited a file or run a command, Haiku picks every relevant skill, ranked, each with a one-line reason. It re-checks every 3 messages when new files, tools or topics show up, at most 10 times per thread. Haiku sees your recent messages trimmed to a few lines, plus file and tool names, never file contents.
+- **Suggestions for busy threads.** Once a thread has 3 of your messages and Claude has edited a file or run a command, Haiku picks every relevant skill, ranked, each with a one-line reason. It re-checks every 3 messages when new files, tools or topics show up, at most 10 times per thread. To ask sooner, press **Suggest now** in the panel once you've sent a message; it counts as one of the 10. Haiku sees your recent messages trimmed to a few lines, plus file and tool names, never file contents.
 - **A hint above the prompt** when new suggestions arrive while the panel is closed.
 - **Cloud sessions** list skills that only exist on your PC, faded and tagged "PC only", and flag suggestions that need a PC session.
 

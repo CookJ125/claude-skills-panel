@@ -59,6 +59,9 @@ export function shouldCheck(a: Activity): boolean {
   return newFiles || newTools || newTopic
 }
 
+/** Whether "Suggest now" can run: there is a message to go on and checks are left. */
+export const canForce = (a: Activity) => a.userTurns > 0 && !a.isChecking && a.checks < MAX_CHECKS
+
 export const trimPrompt = (text: string) => {
   const flat = text.replace(/\s+/g, ' ').trim()
   return flat.length > PROMPT_CHARS ? flat.slice(0, PROMPT_CHARS) + '…' : flat
