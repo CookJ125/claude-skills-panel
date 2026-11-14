@@ -9,61 +9,51 @@ export const GROUPS: readonly CatalogGroup[] = [
   {
     "id": "core",
     "name": "Claude Code built-ins",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "sp",
     "name": "Superpowers",
-    "auto": true,
     "collapsed": false
   },
   {
     "id": "an",
     "name": "Anthropic skills",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "dev",
     "name": "Design and project helpers",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "sc",
     "name": "SpriteCook",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "ad",
     "name": "Adobe for creativity",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "ca",
     "name": "Canva",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "dc",
     "name": "Desktop Commander",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "mine",
     "name": "My skills",
-    "auto": false,
     "collapsed": false
   },
   {
     "id": "un",
     "name": "Unity",
-    "auto": false,
     "collapsed": true
   }
 ]

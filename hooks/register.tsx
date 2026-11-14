@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { CommandInfo, EngineInterface, Register } from 'claude-code'
 
 import type { Activity, AutoTip, ExtraSkill, Here, Recs, View } from '../types'
 import { CATALOG_UPDATED, GROUPS, SKILLS } from './catalog'
@@ -31,7 +31,7 @@ const activity = atom({ plugin: 'skills-panel', key: 'activity' } as const, EMPT
 const recs = atom({ plugin: 'skills-panel', key: 'recs' } as const, { version: 0, items: [] } as Recs, { shape: 'recs-1' })
 const EMPTY_VIEW: View = { query: '', expanded: null, dismissed: [], seenVersion: 0, toggledGroups: [] }
 const view = atom({ plugin: 'skills-panel', key: 'view' } as const, EMPTY_VIEW, { shape: 'view-2' })
-const here = atom({ plugin: 'skills-panel', key: 'here' } as const, null as Here | null, { shape: 'here-2' })
+const here = atom({ plugin: 'skills-panel', key: 'here' } as const, null as Here | null, { shape: 'here-3' })
 const stars = atom({ plugin: 'skills-panel', key: 'stars' } as const, [] as string[])
 const tips = atom({ plugin: 'skills-panel', key: 'tips' } as const, {} as Record<string, AutoTip>)
 
@@ -43,6 +43,8 @@ const BUILT_IN = new Set(['core', 'an'])
 const groupFor = (source: string) => (source === 'user' ? 'mine' : 'new')
 
 type Avail = 'here' | 'auth' | 'off' | 'pc-only'
+/** Who starts a skill: Claude when it fits, only the person typing /name, or not known. */
+type Starts = 'auto' | 'manual' | 'unknown'
 
 type Entry = {
   id: string
@@ -54,7 +56,7 @@ type Entry = {
   tryIt?: string
   tip?: string
   isAutoTip: boolean
-  isManualOnly: boolean
+  starts: Starts
   avail: Avail
 }
 
@@ -69,6 +71,12 @@ async function survey($: EngineInterface): Promise<Here> {
     .filter(c => (c.source === 'plugin' || c.source === 'user') && c.name !== PANE && c.plugin !== 'skills-panel')
     .filter(c => !known.has(c.name.toLowerCase()) && !known.has((c.name.split(':').pop() ?? '').toLowerCase()))
     .map(c => ({ id: c.name, what: c.description, source: c.plugin ?? c.source, group: groupFor(c.source) }))
+  const home = ((await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) || '').replaceAll('\\', '/')
+  for (const x of extras) {
+    const command = commands.find(c => c.name === x.id)
+    const file = command && home !== '' ? await skillFile($, home, command) : undefined
+    if (file !== undefined) x.isManualOnly = /^disable-model-invocation:\s*true\s*$/m.test(frontmatter(await $.fs.read(file)))
+  }
   const listedSet = new Set(listed.map(n => n.toLowerCase()))
   const missingLocally =
     isCloud || listed.length === 0
@@ -81,6 +89,36 @@ async function survey($: EngineInterface): Promise<Here> {
     serverStatus[server] = mine.some(t => !t.endsWith('__authenticate')) ? 'ready' : mine.length > 0 ? 'auth' : 'off'
   }
   return { isCloud, listed, extras, missingLocally, serverStatus }
+}
+
+const frontmatter = (text: string) => /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? ''
+
+/** Where a skill or command not in the catalog is defined, to read its frontmatter. */
+async function skillFile($: EngineInterface, home: string, c: CommandInfo): Promise<string | undefined> {
+  const short = c.name.split(':').pop() ?? c.name
+  const roots =
+    c.source === 'user'
+      ? [`${home}/.claude`, `${home}/.claude/skills/synced`, '.claude']
+      : await pluginRoots($, home, c.plugin ?? c.name.split(':')[0] ?? '')
+  for (const root of roots) {
+    for (const path of [`${root}/skills/${short}/SKILL.md`, `${root}/${short}/SKILL.md`, `${root}/commands/${short}.md`]) {
+      if (await $.fs.exists(path)) return path
+    }
+  }
+  return undefined
+}
+
+/** A plugin's installed folders: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>. */
+async function pluginRoots($: EngineInterface, home: string, plugin: string): Promise<string[]> {
+  const cache = `${home}/.claude/plugins/cache`
+  const markets = await $.fs.list(cache).catch(() => [])
+  const out: string[] = []
+  for (const m of markets.filter(e => e.kind === 'dir')) {
+    const versions = await $.fs.list(`${cache}/${m.name}/${plugin}`).catch(() => [])
+    const newest = versions.filter(v => v.kind === 'dir').sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+    if (newest !== undefined) out.push(`${cache}/${m.name}/${plugin}/${newest.name}`)
+  }
+  return out
 }
 
 function availability(s: { id: string; short: string; group: string; env: string[] }, hn: Here | null): Avail {
@@ -102,7 +140,7 @@ function entries(hn: Here | null, autoTips: Record<string, AutoTip>): Entry[] {
   const fromCatalog: Entry[] = SKILLS.filter(s => !missing.has(s.id)).map(s => ({
     ...s,
     isAutoTip: false,
-    isManualOnly: s.isManualOnly === true,
+    starts: (s.isManualOnly === true ? 'manual' : 'auto') as Starts,
     avail: availability(s, hn),
   }))
   const fromDisk: Entry[] = (hn?.extras ?? []).map(x => ({
@@ -115,7 +153,7 @@ function entries(hn: Here | null, autoTips: Record<string, AutoTip>): Entry[] {
     tryIt: autoTips[x.id]?.tryIt,
     tip: autoTips[x.id]?.tip,
     isAutoTip: autoTips[x.id] !== undefined,
-    isManualOnly: false,
+    starts: (x.isManualOnly === undefined ? 'unknown' : x.isManualOnly ? 'manual' : 'auto') as Starts,
     avail: 'here' as Avail,
   }))
   return [...fromCatalog, ...fromDisk]
@@ -130,7 +168,7 @@ async function runCheck($: EngineInterface, isForced = false) {
   await update($, activity, x => ({ ...x, isChecking: true }))
   const hn = await read($, here)
   const list = entries(hn, await read($, tips))
-  const candidates: Candidate[] = list.map(s => ({ id: s.id, what: s.what, env: s.env, isHere: s.avail === 'here' || s.avail === 'auth', isManualOnly: s.isManualOnly }))
+  const candidates: Candidate[] = list.map(s => ({ id: s.id, what: s.what, env: s.env, isHere: s.avail === 'here' || s.avail === 'auth', isManualOnly: s.starts === 'manual' }))
   const where = (await $.session.repo())?.name ?? baseName(await $.session.cwd())
   const reply = await $.model.complete({
     model: MODEL,
@@ -179,15 +217,21 @@ async function openPane($: EngineInterface) {
 }
 
 function updatePrompt(hn: Here) {
-  const added = hn.extras.map(x => `- ${x.id} (from ${x.source}, group "${x.group}"): ${x.what}`)
+  const added = hn.extras.map(x => `- ${x.id} (from ${x.source}, group "${x.group}"${x.isManualOnly ? ', manual-only' : ''}): ${x.what}`)
   return [
     'Update the cloud skill list of the skills-panel mod (GitHub repo CookJ125/claude-skills-panel, file hooks/catalog.ts).',
-    added.length ? `Add these skills, with the group given, fit 0, env ["code"], and the "what" text below. For a "mine" skill, read its SKILL.md in ~/.claude/skills and set isManualOnly: true when it has disable-model-invocation: true:\n${added.join('\n')}` : '',
+    added.length ? `Add these skills, with the group given, fit 0, env ["code"], and the "what" text below. Set isManualOnly: true on the ones marked manual-only:\n${added.join('\n')}` : '',
     hn.missingLocally.length ? `Remove these skills, which are no longer installed: ${hn.missingLocally.join(', ')}` : '',
     'Set CATALOG_UPDATED to today, bump the patch version in .claude-plugin/plugin.json, commit, push, then run `claude plugin update skills-panel`.',
   ]
     .filter(Boolean)
     .join('\n\n')
+}
+
+const STARTS_TEXT: Record<Starts, (name: string) => string> = {
+  auto: name => `Starts: Claude loads it on its own when it fits, or you type /${name}.`,
+  manual: name => `Starts: only when you type /${name}. Claude never loads it on its own.`,
+  unknown: name => `Starts: not known (its SKILL.md wasn't found). Type /${name} to be sure.`,
 }
 
 // ---------- the module
@@ -324,8 +368,8 @@ export const register: Register = on => {
       if (s.avail === 'pc-only') out.push({ text: 'PC only', color: 'warning' })
       if (s.avail === 'auth') out.push({ text: 'Sign-in needed', color: 'warning' })
       if (s.avail === 'off') out.push({ text: 'Not connected', color: 'error' })
-      if (s.isManualOnly) out.push({ text: `type /${s.short}`, color: 'subtle' })
-      if (GROUPS.find(g => g.id === s.group)?.auto) out.push({ text: 'Auto', color: 'subtle' })
+      if (s.starts === 'manual') out.push({ text: `type /${s.short}`, color: 'subtle' })
+      if (s.starts === 'auto') out.push({ text: 'Auto', color: 'subtle' })
       if (s.fit === 2) out.push({ text: 'fits your work', color: 'suggestion' })
       return out
     }
@@ -351,6 +395,7 @@ export const register: Register = on => {
         )}
         {s.tip && <Text dimColor>Tip: {s.tip}</Text>}
         {s.isAutoTip && <Text dimColor italic>Try and tip auto-written by Haiku.</Text>}
+        <Text dimColor>{STARTS_TEXT[s.starts](s.short)}</Text>
         {s.avail === 'auth' && <Text color="warning">Sign in first: run /mcp from a claude terminal.</Text>}
         {s.avail === 'off' && <Text color="error">Its connector isn't connected in this session.</Text>}
         {s.avail === 'pc-only' && <Text color="warning">Not installed in this cloud session. Move the task to a Code session on your PC to use it.</Text>}
@@ -395,7 +440,7 @@ export const register: Register = on => {
 
     const groupOpen = (id: string, collapsedByDefault: boolean) => collapsedByDefault !== v.toggledGroups.includes(id)
 
-    const allGroups = [...GROUPS, { id: 'new', name: 'Newly found', auto: false, collapsed: false }]
+    const allGroups = [...GROUPS, { id: 'new', name: 'Newly found', collapsed: false }]
 
     return (
       <Box flexDirection="column" gap={1}>

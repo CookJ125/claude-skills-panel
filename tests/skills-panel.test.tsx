@@ -21,7 +21,7 @@ const USAGE = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, c
 function engine(on: On, opts: { isCloud: boolean; answer: string }) {
   const asked: string[] = []
   mock.store(on)
-  mock.env(on, opts.isCloud ? { CLAUDE_CODE_REMOTE: 'true' } : {})
+  mock.env(on, opts.isCloud ? { CLAUDE_CODE_REMOTE: 'true', HOME: '/home/u' } : { USERPROFILE: 'C:\\Users\\u' })
   const commands: CommandInfo[] = opts.isCloud
     ? [{ name: 'code-review', description: 'Review', source: 'builtin' }]
     : [
@@ -42,6 +42,25 @@ function engine(on: On, opts: { isCloud: boolean; answer: string }) {
 ${JSON.stringify(e.system ?? '')}`)
     const text = String(e.prompt).includes('tryIt') ? '{"brand-new-skill":{"tryIt":"Do the new thing","tip":"Use it often."}}' : opts.answer
     return { value: { isAnswered: true, text, usage: USAGE } }
+  })
+  // On disk: brand-new-skill only the person can start; other-plugin:thing Claude can start.
+  const files: Record<string, string> = {
+    'C:/Users/u/.claude/skills/brand-new-skill/SKILL.md': '---\r\nname: brand-new-skill\r\ndisable-model-invocation: true\r\n---\r\nBody',
+    'C:/Users/u/.claude/plugins/cache/mkt/other-plugin/1.0.0/skills/thing/SKILL.md': '---\nname: thing\ndescription: A plugin skill\n---\nBody',
+  }
+  const dirs: Record<string, { name: string; kind: 'dir'; mtimeMs: number }[]> = {
+    'C:/Users/u/.claude/plugins/cache': [{ name: 'mkt', kind: 'dir', mtimeMs: 1 }],
+    'C:/Users/u/.claude/plugins/cache/mkt/other-plugin': [{ name: '1.0.0', kind: 'dir', mtimeMs: 1 }],
+  }
+  const slashed = (path: string) => path.replaceAll('\\', '/') // the engine hands paths over with backslashes on Windows
+  on('fs.exists', (_, e) => ({ value: files[slashed(e.path)] !== undefined }))
+  on('fs.read', (_, e) => {
+    const text = files[slashed(e.path)]
+    return text === undefined ? { deny: 'ENOENT' } : { value: text }
+  })
+  on('fs.list', (_, e) => {
+    const entries = dirs[slashed(e.path)]
+    return entries === undefined ? { deny: 'ENOENT' } : { value: entries.map(d => ({ ...d, size: 0, isLink: false })) }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('prompt.submit', (_, e) => ({ text: e.text }))
@@ -189,6 +208,12 @@ test('personal skills from ~/.claude/skills get their own "My skills" group; man
     expect(await ui.find({ type: 'Text', text: /type \/unslop/ })).toBeDefined()
     expect(await ui.find({ key: 'all:other-plugin:thing' })).toBeDefined()
     expect(await ui.find({ key: 'all:handoff' })).toBeUndefined() // not installed on this PC
+    // Who starts each one: read from the catalog, or from the skill's own SKILL.md.
+    expect(await ui.find({ type: 'Text', text: /type \/brand-new-skill/ })).toBeDefined()
+    await ui.press({ key: 'all:other-plugin:thing' })
+    expect(await ui.find({ type: 'Text', text: /Claude loads it on its own when it fits/ })).toBeDefined()
+    await ui.press({ key: 'all:code-review' })
+    expect(await ui.find({ type: 'Text', text: /Claude loads it on its own when it fits, or you type \/code-review/ })).toBeDefined()
     await ui.unmount()
   }
 })

@@ -1,6 +1,6 @@
 export type Env = 'code' | 'cloud' | 'chat'
 
-export type CatalogGroup = { id: string; name: string; auto: boolean; collapsed: boolean }
+export type CatalogGroup = { id: string; name: string; collapsed: boolean }
 
 export type CatalogSkill = {
   id: string
@@ -43,7 +43,14 @@ export type View = {
 }
 
 /** A skill found on disk that the catalog does not know. */
-export type ExtraSkill = { id: string; what: string; source: string; group: string }
+export type ExtraSkill = {
+  id: string
+  what: string
+  source: string
+  group: string
+  /** From its SKILL.md's disable-model-invocation; absent when the file wasn't found. */
+  isManualOnly?: boolean
+}
 
 export type AutoTip = { tryIt: string; tip: string }
 
