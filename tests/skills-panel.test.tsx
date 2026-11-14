@@ -28,6 +28,8 @@ function engine(on: On, opts: { isCloud: boolean; answer: string }) {
         { name: 'superpowers:systematic-debugging', description: 'Debug', source: 'plugin', plugin: 'superpowers' },
         { name: 'superpowers:test-driven-development', description: 'TDD', source: 'plugin', plugin: 'superpowers' },
         { name: 'brand-new-skill', description: 'Does a new thing', source: 'user' },
+        { name: 'unslop', description: 'Cut AI tells from any writing.', source: 'user' },
+        { name: 'other-plugin:thing', description: 'A plugin skill', source: 'plugin', plugin: 'other-plugin' },
       ]
   on('command.list', () => ({ value: commands }))
   on('command.register', () => ({ value: { command: 'skills-panel' } }))
@@ -36,7 +38,8 @@ function engine(on: On, opts: { isCloud: boolean; answer: string }) {
   on('session.cwd', () => ({ value: 'D:/Claude/gemcaster-play' }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('model.complete', (_, e) => {
-    asked.push(String(e.prompt))
+    asked.push(`${String(e.prompt)}
+${JSON.stringify(e.system ?? '')}`)
     const text = String(e.prompt).includes('tryIt') ? '{"brand-new-skill":{"tryIt":"Do the new thing","tip":"Use it often."}}' : opts.answer
     return { value: { isAnswered: true, text, usage: USAGE } }
   })
@@ -173,4 +176,33 @@ test('on the PC, a new skill gets auto-written tips and the cloud list shows as 
   expect(await ui.find({ type: 'Text', text: /auto-written by Haiku/ })).toBeDefined()
   await ui.press({ key: 'star:brand-new-skill' })
   await ui.unmount()
+})
+
+test('personal skills from ~/.claude/skills get their own "My skills" group; manual-only ones say to type them', async ($, on) => {
+  engine(on, { isCloud: false, answer: '[]' })
+  await $.session.start({ cwd: 'D:/x', surface: 'desktop', isInteractive: true })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ key: 'g:mine' })).toBeDefined()
+    expect(await ui.find({ key: 'all:unslop' })).toBeDefined() // known, hand-written
+    expect(await ui.find({ key: 'all:brand-new-skill' })).toBeDefined() // found on disk
+    expect(await ui.find({ type: 'Text', text: /type \/unslop/ })).toBeDefined()
+    expect(await ui.find({ key: 'all:other-plugin:thing' })).toBeDefined()
+    expect(await ui.find({ key: 'all:handoff' })).toBeUndefined() // not installed on this PC
+    await ui.unmount()
+  }
+})
+
+test('Haiku is told which skills only the user can start', async ($, on) => {
+  const clock = mock.clock(on)
+  const asked = engine(on, { isCloud: false, answer: '[]' })
+  await $.session.start({ cwd: 'D:/x', surface: 'desktop', isInteractive: true })
+  await turn($, 'tidy the readme', 'Edit')
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'now' })
+  await ui.unmount()
+  await clock.advance(100)
+  const check = asked.find(x => x.includes('Skills (id | what it does)')) ?? ''
+  expect(check).toContain('unslop | Cuts AI tells from a piece of writing. | USER-STARTED ONLY')
+  expect(check).toContain('Type /<id>')
 })

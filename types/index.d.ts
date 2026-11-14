@@ -12,6 +12,8 @@ export type CatalogSkill = {
   tryIt?: string
   tip?: string
   auth?: string
+  /** Only the person can start it, by typing /id: Claude never picks it (disable-model-invocation). */
+  isManualOnly?: boolean
 }
 
 /** What this thread has done, kept to decide when to ask for recommendations. */
@@ -41,7 +43,7 @@ export type View = {
 }
 
 /** A skill found on disk that the catalog does not know. */
-export type ExtraSkill = { id: string; what: string; source: string }
+export type ExtraSkill = { id: string; what: string; source: string; group: string }
 
 export type AutoTip = { tryIt: string; tip: string }
 

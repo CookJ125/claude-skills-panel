@@ -3,7 +3,7 @@
 // Regenerate from a PC session with the panel's "Update cloud list" button.
 import type { CatalogGroup, CatalogSkill } from '../types'
 
-export const CATALOG_UPDATED = '2026-11-10'
+export const CATALOG_UPDATED = '2026-11-14'
 
 export const GROUPS: readonly CatalogGroup[] = [
   {
@@ -51,6 +51,12 @@ export const GROUPS: readonly CatalogGroup[] = [
   {
     "id": "dc",
     "name": "Desktop Commander",
+    "auto": false,
+    "collapsed": false
+  },
+  {
+    "id": "mine",
+    "name": "My skills",
     "auto": false,
     "collapsed": false
   },
@@ -1522,5 +1528,94 @@ export const SKILLS: readonly CatalogSkill[] = [
   "env": [
    "code"
   ]
+ },
+ {
+  "id": "grilling",
+  "short": "grilling",
+  "group": "mine",
+  "fit": 1,
+  "what": "Interviews you in rounds about a plan or idea, each question with a recommended answer, until nothing is left assumed.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "Grill me on the wave-spawning plan before I build it",
+  "tip": "Answer \"yes\" to take the recommended answer. Claude can start this one itself when you say \"grill\"."
+ },
+ {
+  "id": "writing-for-agents",
+  "short": "writing-for-agents",
+  "group": "mine",
+  "fit": 1,
+  "what": "Guidance for writing documents Claude reads: skills, CLAUDE.md and AGENTS.md.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "Tidy up the gemcaster CLAUDE.md",
+  "tip": "Claude starts this one itself when you edit a skill or CLAUDE.md, so you rarely need to type it."
+ },
+ {
+  "id": "handoff",
+  "short": "handoff",
+  "group": "mine",
+  "fit": 1,
+  "what": "Writes a handoff file that sums up this thread, so a fresh session can carry on the work.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "/handoff finish the tether fix and add tests",
+  "tip": "Type /handoff yourself; Claude won't start it. The file goes in your temp folder, not the repo.",
+  "isManualOnly": true
+ },
+ {
+  "id": "show-me-your-work",
+  "short": "show-me-your-work",
+  "group": "mine",
+  "fit": 1,
+  "what": "Keeps a decision log (one TSV row per decision: what, why, evidence, result) for long or unattended work.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "/show-me-your-work then run the perf pass overnight",
+  "tip": "Type it yourself before long runs; Claude won't start it. Needs bash for scripts/log.sh.",
+  "isManualOnly": true
+ },
+ {
+  "id": "to-questionnaire",
+  "short": "to-questionnaire",
+  "group": "mine",
+  "fit": 1,
+  "what": "Turns a decision you can't answer alone into a questionnaire for someone who knows more.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "/to-questionnaire for the art lead about sprite sizes",
+  "tip": "Type it yourself; Claude won't start it. It asks who it's for and what you need back, then writes a .md file.",
+  "isManualOnly": true
+ },
+ {
+  "id": "unslop",
+  "short": "unslop",
+  "group": "mine",
+  "fit": 1,
+  "what": "Cuts AI tells from a piece of writing.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "/unslop the README intro",
+  "tip": "Type it yourself; Claude won't start it. Good last pass on anything other people will read.",
+  "isManualOnly": true
+ },
+ {
+  "id": "wait-what",
+  "short": "wait-what",
+  "group": "mine",
+  "fit": 1,
+  "what": "Asks Claude to re-pitch its last message in plain, simple words with a bit more context.",
+  "env": [
+   "code"
+  ],
+  "tryIt": "/wait-what",
+  "tip": "Type it yourself when a reply loses you; Claude won't start it.",
+  "isManualOnly": true
  }
 ]

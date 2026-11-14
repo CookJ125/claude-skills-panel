@@ -31,7 +31,7 @@ const activity = atom({ plugin: 'skills-panel', key: 'activity' } as const, EMPT
 const recs = atom({ plugin: 'skills-panel', key: 'recs' } as const, { version: 0, items: [] } as Recs, { shape: 'recs-1' })
 const EMPTY_VIEW: View = { query: '', expanded: null, dismissed: [], seenVersion: 0, toggledGroups: [] }
 const view = atom({ plugin: 'skills-panel', key: 'view' } as const, EMPTY_VIEW, { shape: 'view-2' })
-const here = atom({ plugin: 'skills-panel', key: 'here' } as const, null as Here | null, { shape: 'here-1' })
+const here = atom({ plugin: 'skills-panel', key: 'here' } as const, null as Here | null, { shape: 'here-2' })
 const stars = atom({ plugin: 'skills-panel', key: 'stars' } as const, [] as string[])
 const tips = atom({ plugin: 'skills-panel', key: 'tips' } as const, {} as Record<string, AutoTip>)
 
@@ -39,6 +39,8 @@ const tips = atom({ plugin: 'skills-panel', key: 'tips' } as const, {} as Record
 const GROUP_SERVER: Record<string, string> = { sc: 'spritecook', ad: 'adobe', ca: 'canva', dc: 'desktop_commander' }
 /** Groups whose skills ship with Claude Code itself rather than a plugin installed on the PC. */
 const BUILT_IN = new Set(['core', 'an'])
+/** Where a skill the catalog doesn't know goes: the person's own (~/.claude/skills, synced ones too) or a plugin's. */
+const groupFor = (source: string) => (source === 'user' ? 'mine' : 'new')
 
 type Avail = 'here' | 'auth' | 'off' | 'pc-only'
 
@@ -52,6 +54,7 @@ type Entry = {
   tryIt?: string
   tip?: string
   isAutoTip: boolean
+  isManualOnly: boolean
   avail: Avail
 }
 
@@ -65,7 +68,7 @@ async function survey($: EngineInterface): Promise<Here> {
   const extras: ExtraSkill[] = commands
     .filter(c => (c.source === 'plugin' || c.source === 'user') && c.name !== PANE && c.plugin !== 'skills-panel')
     .filter(c => !known.has(c.name.toLowerCase()) && !known.has((c.name.split(':').pop() ?? '').toLowerCase()))
-    .map(c => ({ id: c.name, what: c.description, source: c.plugin ?? c.source }))
+    .map(c => ({ id: c.name, what: c.description, source: c.plugin ?? c.source, group: groupFor(c.source) }))
   const listedSet = new Set(listed.map(n => n.toLowerCase()))
   const missingLocally =
     isCloud || listed.length === 0
@@ -99,18 +102,20 @@ function entries(hn: Here | null, autoTips: Record<string, AutoTip>): Entry[] {
   const fromCatalog: Entry[] = SKILLS.filter(s => !missing.has(s.id)).map(s => ({
     ...s,
     isAutoTip: false,
+    isManualOnly: s.isManualOnly === true,
     avail: availability(s, hn),
   }))
   const fromDisk: Entry[] = (hn?.extras ?? []).map(x => ({
     id: x.id,
     short: x.id.split(':').pop() ?? x.id,
-    group: 'new',
+    group: x.group,
     fit: 0,
     what: x.what,
     env: ['code'],
     tryIt: autoTips[x.id]?.tryIt,
     tip: autoTips[x.id]?.tip,
     isAutoTip: autoTips[x.id] !== undefined,
+    isManualOnly: false,
     avail: 'here' as Avail,
   }))
   return [...fromCatalog, ...fromDisk]
@@ -125,7 +130,7 @@ async function runCheck($: EngineInterface, isForced = false) {
   await update($, activity, x => ({ ...x, isChecking: true }))
   const hn = await read($, here)
   const list = entries(hn, await read($, tips))
-  const candidates: Candidate[] = list.map(s => ({ id: s.id, what: s.what, env: s.env, isHere: s.avail === 'here' || s.avail === 'auth' }))
+  const candidates: Candidate[] = list.map(s => ({ id: s.id, what: s.what, env: s.env, isHere: s.avail === 'here' || s.avail === 'auth', isManualOnly: s.isManualOnly }))
   const where = (await $.session.repo())?.name ?? baseName(await $.session.cwd())
   const reply = await $.model.complete({
     model: MODEL,
@@ -174,10 +179,10 @@ async function openPane($: EngineInterface) {
 }
 
 function updatePrompt(hn: Here) {
-  const added = hn.extras.map(x => `- ${x.id} (from ${x.source}): ${x.what}`)
+  const added = hn.extras.map(x => `- ${x.id} (from ${x.source}, group "${x.group}"): ${x.what}`)
   return [
     'Update the cloud skill list of the skills-panel mod (GitHub repo CookJ125/claude-skills-panel, file hooks/catalog.ts).',
-    added.length ? `Add these skills, with group "new", fit 0, env ["code"], and the "what" text below:\n${added.join('\n')}` : '',
+    added.length ? `Add these skills, with the group given, fit 0, env ["code"], and the "what" text below. For a "mine" skill, read its SKILL.md in ~/.claude/skills and set isManualOnly: true when it has disable-model-invocation: true:\n${added.join('\n')}` : '',
     hn.missingLocally.length ? `Remove these skills, which are no longer installed: ${hn.missingLocally.join(', ')}` : '',
     'Set CATALOG_UPDATED to today, bump the patch version in .claude-plugin/plugin.json, commit, push, then run `claude plugin update skills-panel`.',
   ]
@@ -319,6 +324,7 @@ export const register: Register = on => {
       if (s.avail === 'pc-only') out.push({ text: 'PC only', color: 'warning' })
       if (s.avail === 'auth') out.push({ text: 'Sign-in needed', color: 'warning' })
       if (s.avail === 'off') out.push({ text: 'Not connected', color: 'error' })
+      if (s.isManualOnly) out.push({ text: `type /${s.short}`, color: 'subtle' })
       if (GROUPS.find(g => g.id === s.group)?.auto) out.push({ text: 'Auto', color: 'subtle' })
       if (s.fit === 2) out.push({ text: 'fits your work', color: 'suggestion' })
       return out

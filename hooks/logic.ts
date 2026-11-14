@@ -75,16 +75,17 @@ export function toolLabel(tool: string) {
   return m ? `mcp:${(m[1] ?? '').replace(/^plugin_/, '')}` : tool
 }
 
-export type Candidate = Pick<CatalogSkill, 'id' | 'what' | 'env'> & { isHere: boolean }
+export type Candidate = Pick<CatalogSkill, 'id' | 'what' | 'env'> & { isHere: boolean; isManualOnly?: boolean }
 
 /** The fixed part of the request: instructions and every skill. Cached between checks. */
 export function systemText(skills: readonly Candidate[], isCloud: boolean) {
-  const lines = skills.map(s => `${s.id} | ${s.what}${s.isHere ? '' : ' | NOT AVAILABLE IN THIS SESSION'}`)
+  const lines = skills.map(s => `${s.id} | ${s.what}${s.isHere ? '' : ' | NOT AVAILABLE IN THIS SESSION'}${s.isManualOnly ? ' | USER-STARTED ONLY' : ''}`)
   return [
     'You pick Claude Code skills that would help with the work happening in a coding thread.',
     `The thread runs in ${isCloud ? 'a cloud session (a remote machine with no access to the user\'s PC)' : 'a Code session on the user\'s own PC'}.`,
     'Pick EVERY skill that is clearly relevant, as many as apply, most relevant first. Skip skills that are only loosely related.',
     'Skills marked NOT AVAILABLE still count: recommend them when they fit, and say in the reason what they would add.',
+    'Skills marked USER-STARTED ONLY never run unless the user types /<id>. When you pick one, start its reason with "Type /<id>".',
     'Each reason is one short sentence, under 110 characters, tied to what the thread is actually doing. Plain words, no jargon.',
     'Answer with JSON only, no prose: [{"skill":"<exact id>","reason":"<sentence>"}]. Answer [] when nothing fits.',
     '',
