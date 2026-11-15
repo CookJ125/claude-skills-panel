@@ -62,6 +62,8 @@ type Entry = {
 
 // ---------- what this session can reach
 
+const MANUAL_SENTENCE = /only use when the user asks for it by name/i
+
 async function survey($: EngineInterface): Promise<Here> {
   const isCloud = (await $.env.get('CLAUDE_CODE_REMOTE')) === 'true'
   const commands = await $.command.list()
@@ -75,7 +77,10 @@ async function survey($: EngineInterface): Promise<Here> {
   for (const x of extras) {
     const command = commands.find(c => c.name === x.id)
     const file = command && home !== '' ? await skillFile($, home, command) : undefined
-    if (file !== undefined) x.isManualOnly = /^disable-model-invocation:\s*true\s*$/m.test(frontmatter(await $.fs.read(file)))
+    const front = file === undefined ? '' : frontmatter(await $.fs.read(file))
+    // claude.ai rejects disable-model-invocation, so skills synced from it say this sentence instead.
+    const isSaid = MANUAL_SENTENCE.test(x.what) || MANUAL_SENTENCE.test(front)
+    if (file !== undefined || isSaid) x.isManualOnly = isSaid || /^disable-model-invocation:\s*true\s*$/m.test(front)
   }
   const listedSet = new Set(listed.map(n => n.toLowerCase()))
   const missingLocally =

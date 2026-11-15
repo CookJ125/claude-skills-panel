@@ -30,6 +30,9 @@ function engine(on: On, opts: { isCloud: boolean; answer: string }) {
         { name: 'brand-new-skill', description: 'Does a new thing', source: 'user' },
         { name: 'unslop', description: 'Cut AI tells from any writing.', source: 'user' },
         { name: 'other-plugin:thing', description: 'A plugin skill', source: 'plugin', plugin: 'other-plugin' },
+        // Synced from claude.ai, which rejects disable-model-invocation, so the description says it instead.
+        { name: 'synced-thing', description: 'Does a synced thing. Only use when the user asks for it by name.', source: 'user' },
+        { name: 'said-only', description: 'No file found. Only use when the user asks for it by name.', source: 'user' },
       ]
   on('command.list', () => ({ value: commands }))
   on('command.register', () => ({ value: { command: 'skills-panel' } }))
@@ -47,6 +50,8 @@ ${JSON.stringify(e.system ?? '')}`)
   const files: Record<string, string> = {
     'C:/Users/u/.claude/skills/brand-new-skill/SKILL.md': '---\r\nname: brand-new-skill\r\ndisable-model-invocation: true\r\n---\r\nBody',
     'C:/Users/u/.claude/plugins/cache/mkt/other-plugin/1.0.0/skills/thing/SKILL.md': '---\nname: thing\ndescription: A plugin skill\n---\nBody',
+    'C:/Users/u/.claude/skills/synced/synced-thing/SKILL.md':
+      '---\nname: synced-thing\ndescription: Does a synced thing. Only use when the user asks for it by name.\n---\nBody',
   }
   const dirs: Record<string, { name: string; kind: 'dir'; mtimeMs: number }[]> = {
     'C:/Users/u/.claude/plugins/cache': [{ name: 'mkt', kind: 'dir', mtimeMs: 1 }],
@@ -216,6 +221,15 @@ test('personal skills from ~/.claude/skills get their own "My skills" group; man
     expect(await ui.find({ type: 'Text', text: /Claude loads it on its own when it fits, or you type \/code-review/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('skills whose description says "Only use when the user asks for it by name" are tagged to type', async ($, on) => {
+  engine(on, { isCloud: false, answer: '[]' })
+  await $.session.start({ cwd: 'D:/x', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /type \/synced-thing/ })).toBeDefined() // read from the synced SKILL.md
+  expect(await ui.find({ type: 'Text', text: /type \/said-only/ })).toBeDefined() // no file, so from the listed description
+  await ui.unmount()
 })
 
 test('Haiku is told which skills only the user can start', async ($, on) => {
