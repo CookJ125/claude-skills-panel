@@ -307,11 +307,15 @@ export const register: Register = on => {
     const v = await read($, view)
     const hn = await read($, here)
     const visible = r.items.filter(i => !v.dismissed.includes(i.id))
-    if (e.props.hasSurvey || visible.length === 0 || r.version <= v.seenVersion) return next(e)
+    if (e.props.hasSurvey) return next(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    // With nothing new to suggest, a small button keeps the panel one click away.
+    if (visible.length === 0 || r.version <= v.seenVersion) {
+      return <Button key="open" label="Skills" plain onPress={() => void openPane($)} />
+    }
     const list = entries(hn, await read($, tips))
     const pcOnly = visible.filter(i => list.find(s => s.id === i.id)?.avail === 'pc-only').length
     const names = visible.slice(0, 3).map(i => i.id.split(':').pop()).join(', ')
-    const { Box, Button, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="row" gap={1}>
         <Text wrap="truncate-end">

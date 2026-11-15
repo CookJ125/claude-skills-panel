@@ -1,6 +1,6 @@
 {
   "name": "skills-panel",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A /skills panel listing every skill, with Haiku-picked suggestions once a thread is doing real work.",
   "types": "./types/index.d.ts"
 }

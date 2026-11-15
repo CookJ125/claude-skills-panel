@@ -39,7 +39,10 @@ function engine(on: On, opts: { isCloud: boolean; answer: string }) {
   on('tool.list', () => ({ value: [{ name: 'mcp__plugin_spritecook_spritecook__authenticate', description: '', mcp: true }] }))
   on('session.repo', () => ({ value: null }))
   on('session.cwd', () => ({ value: 'D:/Claude/gemcaster-play' }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', () => {
+    asked.push('(pane opened)')
+    return { value: { isPlaced: true } }
+  })
   on('model.complete', (_, e) => {
     asked.push(`${String(e.prompt)}
 ${JSON.stringify(e.system ?? '')}`)
@@ -124,6 +127,7 @@ test('no check until 3 messages and real work; then Haiku picks are shown first'
   await band.unmount()
   const after = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(await after.find({ type: 'Text', text: /suggested/ })).toBeUndefined()
+  expect(await after.find({ key: 'open' })).toBeDefined() // the panel stays one click away
   await after.unmount()
 })
 
@@ -221,6 +225,17 @@ test('personal skills from ~/.claude/skills get their own "My skills" group; man
     expect(await ui.find({ type: 'Text', text: /Claude loads it on its own when it fits, or you type \/code-review/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('a "Skills" button above the prompt opens the panel before any suggestion', async ($, on) => {
+  const asked = engine(on, { isCloud: false, answer: '[]' })
+  await $.session.start({ cwd: 'D:/x', surface: 'desktop', isInteractive: true })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND, surface })
+    await band.press({ key: 'open' })
+    await band.unmount()
+  }
+  expect(asked.filter(x => x === '(pane opened)').length).toBe(2)
 })
 
 test('skills whose description says "Only use when the user asks for it by name" are tagged to type', async ($, on) => {
